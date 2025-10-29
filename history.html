@@ -169,10 +169,9 @@
       const labels = data.labels || [];  // 日付または曜日
       const seriesByEmotion = {};
 
-      // `seriesByEmotion` 配列のデータを変換
-      data.seriesByEmotion.forEach(item => {
-        const emotion = item.emotion;  // 感情名
-        const count = item.count || 0; // 感情のカウント
+      // `seriesByEmotion` がオブジェクトの場合、Object.keys() を使って反復処理
+      Object.keys(data.seriesByEmotion).forEach(emotion => {
+        const count = data.seriesByEmotion[emotion] || 0; // 感情のカウント
 
         // 感情ごとのデータを`seriesByEmotion`に追加
         if (!seriesByEmotion[emotion]) {
