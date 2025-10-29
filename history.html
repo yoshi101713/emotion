@@ -7,7 +7,7 @@
   <style>
     body { font-family: sans-serif; display: flex; gap: 2rem; padding: 1rem; flex-wrap: wrap; }
     #historyList { list-style: disc; padding-left: 1rem; max-width: 500px; }
-    #chartContainer { width: 500px; min-width: 300px; }
+    #chartContainer { width: 500px; min-width: 300px; height: 360px; } /* グラフの高さ確保 */
     button { background: #5b45ec; color: white; padding: 0.5rem 1rem; border: none; border-radius: 5px; cursor: pointer; margin-top: 1rem; }
     select { margin-bottom: 1rem; }
   </style>
@@ -29,6 +29,80 @@
     <canvas id="emotionChart"></canvas>
   </div>
 
+  <!-- 先に共通の処理を読み込み -->
   <script src="script.js"></script>
+
+  <!-- ★ここから追記部分：描画とページ制御 ★ -->
+  <script>
+    const sel  = document.getElementById("viewSelect");
+    const list = document.getElementById("historyList");
+    const ctx  = document.getElementById("emotionChart").getContext("2d");
+    let chart;
+
+    // 初期表示＆切替
+    document.addEventListener("DOMContentLoaded", refresh);
+    sel.addEventListener("change", refresh);
+
+    async function refresh(){
+      const user = localStorage.getItem("user");
+      if (!user) {
+        list.innerHTML = "<li>未ログインです。index.htmlからログインしてください。</li>";
+        drawChart({labels:[], seriesByEmotion:{}}, "daily");
+        return;
+      }
+
+      const mode = (sel.value === "weekday") ? "weekday" : "daily";
+      // script.js で定義済みの関数を呼ぶ
+      const data = (mode === "weekday")
+        ? await loadWeekdayHistory()
+        : await loadDailyHistory();
+
+      renderList(data);
+      drawChart(data, mode);
+    }
+
+    function renderList(data){
+      list.innerHTML = "";
+      const totalsPerLabel = data.labels.map((_, idx) =>
+        Object.values(data.seriesByEmotion).reduce((s, arr) => s + ((arr && arr[idx]) || 0), 0)
+      );
+      data.labels.forEach((label, i) => {
+        const li = document.createElement("li");
+        li.textContent = `${label}：${totalsPerLabel[i]}件`;
+        list.appendChild(li);
+      });
+    }
+
+    function drawChart(data, mode){
+      const labels = data.labels || [];
+      const emotions = Object.keys(window.colorMap || {});
+      const datasets = emotions.map(emotion => ({
+        label: emotion,
+        backgroundColor: window.colorMap[emotion],
+        data: (data.seriesByEmotion && data.seriesByEmotion[emotion])
+                ? data.seriesByEmotion[emotion]
+                : Array(labels.length).fill(0)
+      }));
+
+      if (chart) chart.destroy();
+      chart = new Chart(ctx, {
+        type: "bar",
+        data: { labels, datasets },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            y: { beginAtZero: true, min: 0, title: { display: true, text: "件数" } },
+            x: { title: { display: true, text: (mode === "weekday") ? "曜日" : "日付" } }
+          },
+          plugins: {
+            legend: { position: "bottom" },
+            title: { display: true, text: (mode === "weekday") ? "曜日別感情分布" : "日別感情分布" }
+          }
+        }
+      });
+    }
+  </script>
+  <!-- ★追記ここまで★ -->
 </body>
 </html>
