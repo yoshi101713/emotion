@@ -2,14 +2,38 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>感情履歴</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
-    body { font-family: sans-serif; display: flex; gap: 2rem; padding: 1rem; flex-wrap: wrap; }
-    #historyList { list-style: disc; padding-left: 1rem; max-width: 500px; }
-    #chartContainer { width: 500px; min-width: 300px; }
-    button { background: #5b45ec; color: white; padding: 0.5rem 1rem; border: none; border-radius: 5px; cursor: pointer; margin-top: 1rem; }
-    select { margin-bottom: 1rem; }
+    body {
+      font-family: sans-serif;
+      display: flex;
+      gap: 2rem;
+      padding: 1rem;
+      flex-wrap: wrap;
+    }
+    #historyList {
+      list-style: disc;
+      padding-left: 1rem;
+      max-width: 500px;
+    }
+    #chartContainer {
+      width: 500px;
+      min-width: 300px;
+    }
+    button {
+      background: #5b45ec;
+      color: white;
+      padding: 0.5rem 1rem;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      margin-top: 1rem;
+    }
+    select {
+      margin-bottom: 1rem;
+    }
   </style>
 </head>
 <body>
@@ -58,10 +82,13 @@
       }
 
       if (data && data.labels) {
+        // データをChart.jsに渡す形式に整形
+        const formattedData = formatDataForChart(data);
+
         // チャートを作成
-        const datasets = Object.keys(data.seriesByEmotion || {}).map(emo => ({
+        const datasets = Object.keys(formattedData.seriesByEmotion || {}).map(emo => ({
           label: emo,
-          data: data.seriesByEmotion[emo],
+          data: formattedData.seriesByEmotion[emo],
           borderWidth: 2,
           fill: false
         }));
@@ -72,7 +99,7 @@
         emotionChart = new Chart(emotionChartCanvas, {
           type: 'line',
           data: {
-            labels: data.labels,
+            labels: formattedData.labels,
             datasets: datasets
           },
           options: { responsive: true, maintainAspectRatio: false }
@@ -99,8 +126,11 @@
           if (msg) msg.textContent = (data && data.message) ? data.message : "履歴取得に失敗しました。";
           return { labels: [], seriesByEmotion: {} };
         }
+
+        // データを正しい形式に整形する
         console.log('Daily Data:', data);  // 追加してレスポンスデータを確認
-        return data;
+        const formattedData = formatDataForChart(data);
+        return formattedData;
       } catch (e) {
         if (msg) msg.textContent = "通信エラーが発生しました。";
         return { labels: [], seriesByEmotion: {} };
@@ -111,7 +141,7 @@
     async function loadWeekdayHistory() {
       const u = getUser();
       const msg = $("#historyMessage") || $("#message");
-      if (!u) {
+      if (!u) { 
         if (msg) msg.textContent = "未ログインです。";
         return { labels: weekdayLabels, seriesByEmotion: {} };
       }
@@ -123,12 +153,36 @@
           if (msg) msg.textContent = (data && data.message) ? data.message : "履歴取得に失敗しました。";
           return { labels: weekdayLabels, seriesByEmotion: {} };
         }
+
+        // データを正しい形式に整形する
         console.log('Weekday Data:', data);  // 追加してレスポンスデータを確認
-        return data;
+        const formattedData = formatDataForChart(data);
+        return formattedData;
       } catch (e) {
         if (msg) msg.textContent = "通信エラーが発生しました。";
         return { labels: weekdayLabels, seriesByEmotion: {} };
       }
+    }
+
+    // データをChart.js用に整形する
+    function formatDataForChart(data) {
+      const labels = data.labels || [];  // 日付または曜日
+      const seriesByEmotion = {};
+
+      // `seriesByEmotion` 配列のデータを変換
+      data.seriesByEmotion.forEach(item => {
+        const emotion = item.emotion;  // 感情名
+        const count = item.count || 0; // 感情のカウント
+
+        // 感情ごとのデータを`seriesByEmotion`に追加
+        if (!seriesByEmotion[emotion]) {
+          seriesByEmotion[emotion] = [];
+        }
+
+        seriesByEmotion[emotion].push(count);  // 感情ごとのデータを追加
+      });
+
+      return { labels, seriesByEmotion };
     }
 
     // ユーザーを取得
