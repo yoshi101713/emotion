@@ -44,11 +44,19 @@
     (async function(){
       const daily = await loadDailyHistory();
       const weekday = await loadWeekdayHistory();
+      
+      // エラーメッセージを表示するために
+      const historyMessage = document.getElementById("historyMessage");
+
+      // 日別データが空の場合の処理
+      if (!daily || !daily.labels || daily.labels.length === 0) {
+        historyMessage.textContent = "日別の履歴データがありません。";
+      }
 
       // 日別
-      if(daily && daily.labels){
+      if (daily && daily.labels) {
         const ds = [];
-        for(const emo in daily.seriesByEmotion||{}){
+        for (const emo in daily.seriesByEmotion || {}) {
           ds.push({
             label: emo,
             data: daily.seriesByEmotion[emo],
@@ -63,10 +71,15 @@
         });
       }
 
+      // 曜日別データが空の場合の処理
+      if (!weekday || !weekday.labels || weekday.labels.length === 0) {
+        historyMessage.textContent += " 曜日別の履歴データがありません。";
+      }
+
       // 曜日別
-      if(weekday && weekday.labels){
+      if (weekday && weekday.labels) {
         const ds2 = [];
-        for(const emo in weekday.seriesByEmotion||{}){
+        for (const emo in weekday.seriesByEmotion || {}) {
           ds2.push({
             label: emo,
             data: weekday.seriesByEmotion[emo],
