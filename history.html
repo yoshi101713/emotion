@@ -33,7 +33,7 @@
   <!-- 共通ロジック（API呼び出し・集計など） -->
   <script src="script.js"></script>
 
-  <!-- ページ固有：詳細リスト＋グラフ描画 -->
+  <!-- ページ固有：日別=詳細 / 曜日別=サマリー -->
   <script>
     const sel  = document.getElementById("viewSelect");
     const list = document.getElementById("historyList");
@@ -52,7 +52,6 @@
       }
 
       const mode = (sel.value === "weekday") ? "weekday" : "daily";
-
       // 生配列（[{timestamp, emotion, user}, ...]）を取得
       const { ok, data: raw } = await getJSON(`${historyApiUrl}?user=${encodeURIComponent(user)}`);
       if (!ok || !Array.isArray(raw)) {
@@ -61,31 +60,29 @@
         return;
       }
 
-      // 左リスト：詳細（時刻＋感情）を表示
-      renderListRaw(raw, mode);
+      // 左側リスト：日別は詳細、曜日別はサマリー
+      if (mode === "daily") {
+        renderListDailyDetail(raw);
+      } else {
+        renderListWeekdaySummary(raw);
+      }
 
-      // グラフ：集計（script.js の aggregateHistory を利用）
+      // グラフ：script.js の aggregateHistory で集計して描画
       const agg = aggregateHistory(raw, mode);
       drawChart(agg, mode);
     }
 
-    // ===== 詳細リスト（「日付/曜日：件数」＋配下に「HH:MM:SS 感情」） =====
-    function renderListRaw(raw, mode){
-      const wd = ["日","月","火","水","木","金","土"];
-      const grouped = {}; // key -> array of items
-
+    // === 日別：詳細（各日の下に HH:MM:SS + 感情を列挙） ===
+    function renderListDailyDetail(raw){
+      const grouped = {};
       raw.forEach(it => {
         const d = new Date(it.timestamp);
         if (isNaN(d.getTime())) return;
-        const key = (mode === "weekday") ? wd[d.getDay()] : d.toISOString().slice(0,10);
+        const key = d.toISOString().slice(0,10); // YYYY-MM-DD
         (grouped[key] ||= []).push(it);
       });
 
-      // 並び順：曜日は固定順、日付は昇順
-      const keys = (mode === "weekday")
-        ? wd.filter(k => grouped[k])     // 日→土の固定順（存在するキーのみ）
-        : Object.keys(grouped).sort();   // YYYY-MM-DD 昇順
-
+      const keys = Object.keys(grouped).sort(); // 昇順
       list.innerHTML = "";
       keys.forEach(k => {
         const arr = grouped[k].sort((a,b) => a.timestamp.localeCompare(b.timestamp));
@@ -95,9 +92,29 @@
         const inner = arr
           .map(it => `${formatTime(it.timestamp)}　${it.emotion}`)
           .map(s => `<li>${s}</li>`).join("");
-
         li.innerHTML = `<strong>${k}：${total}件</strong><ul>${inner}</ul>`;
         list.appendChild(li);
+      });
+    }
+
+    // === 曜日別：サマリー（各曜日の合計件数だけ） ===
+    function renderListWeekdaySummary(raw){
+      const wd = ["日","月","火","水","木","金","土"];
+      const counts = Object.fromEntries(wd.map(w => [w, 0]));
+
+      raw.forEach(it => {
+        const d = new Date(it.timestamp);
+        if (isNaN(d.getTime())) return;
+        counts[wd[d.getDay()]]++;
+      });
+
+      list.innerHTML = "";
+      wd.forEach(w => {
+        if (counts[w] > 0) {
+          const li = document.createElement("li");
+          li.textContent = `${w}：${counts[w]}件`;
+          list.appendChild(li);
+        }
       });
     }
 
@@ -107,7 +124,7 @@
       return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
     }
 
-    // ===== グラフ描画 =====
+    // === グラフ描画（従来どおり） ===
     function drawChart(data, mode){
       const labels = data.labels || [];
       const emotions = Object.keys(window.colorMap || {});
