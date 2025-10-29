@@ -85,16 +85,62 @@
 
     // 日別履歴を取得
     async function loadDailyHistory() {
-      const response = await fetch('https://example.com/daily-history?user=津久井浜');
-      const data = await response.json();
-      return data;  // 期待する形式でデータを返す
+      const u = getUser();
+      const msg = $("#historyMessage") || $("#message");
+      if (!u) { 
+        if (msg) msg.textContent = "未ログインです。";
+        return { labels: [], seriesByEmotion: {} }; 
+      }
+
+      try {
+        const url = `${historyApiUrl}?user=${encodeURIComponent(u)}&group=daily`;
+        const { ok, data } = await getJSON(url);
+        if (!ok) {
+          if (msg) msg.textContent = (data && data.message) ? data.message : "履歴取得に失敗しました。";
+          return { labels: [], seriesByEmotion: {} };
+        }
+        console.log('Daily Data:', data);  // 追加してレスポンスデータを確認
+        return data;
+      } catch (e) {
+        if (msg) msg.textContent = "通信エラーが発生しました。";
+        return { labels: [], seriesByEmotion: {} };
+      }
     }
 
     // 曜日別履歴を取得
     async function loadWeekdayHistory() {
-      const response = await fetch('https://example.com/weekday-history?user=津久井浜');
-      const data = await response.json();
-      return data;  // 期待する形式でデータを返す
+      const u = getUser();
+      const msg = $("#historyMessage") || $("#message");
+      if (!u) {
+        if (msg) msg.textContent = "未ログインです。";
+        return { labels: weekdayLabels, seriesByEmotion: {} };
+      }
+
+      try {
+        const url = `${historyApiUrl}?user=${encodeURIComponent(u)}&group=weekday`;
+        const { ok, data } = await getJSON(url);
+        if (!ok) {
+          if (msg) msg.textContent = (data && data.message) ? data.message : "履歴取得に失敗しました。";
+          return { labels: weekdayLabels, seriesByEmotion: {} };
+        }
+        console.log('Weekday Data:', data);  // 追加してレスポンスデータを確認
+        return data;
+      } catch (e) {
+        if (msg) msg.textContent = "通信エラーが発生しました。";
+        return { labels: weekdayLabels, seriesByEmotion: {} };
+      }
+    }
+
+    // ユーザーを取得
+    function getUser() {
+      return localStorage.getItem("user") || "";
+    }
+
+    // APIからデータを取得（GETメソッド）
+    async function getJSON(url) {
+      const res = await fetch(url, { method: "GET" });
+      const data = await res.json().catch(() => ({}));
+      return { ok: res.ok, status: res.status, data };
     }
   </script>
 </body>
