@@ -40,8 +40,9 @@
   <div>
     <h2>感情履歴</h2>
     <label for="viewSelect">表示切替：</label>
-    <select id="viewSelect" disabled>
+    <select id="viewSelect">
       <option value="date">日別</option>
+      <!-- 曜日別は無効化 -->
     </select>
     <ul id="historyList"></ul>
     <button onclick="window.location.href='main.html'">戻る</button>
@@ -54,16 +55,15 @@
 
   <script src="script.js"></script>
   <script>
-    // 変数の宣言
     const emotionChartCanvas = document.getElementById('emotionChart');
     let emotionChart;
 
-    // 初期表示
+    // 初期表示（デフォルトで日別に設定）
     async function updateChart(view) {
       const historyList = document.getElementById('historyList');
       let data;
 
-      // 日別の場合
+      // 日別履歴を取得
       if (view === 'date') {
         data = await loadDailyHistory();
         historyList.innerHTML = "日別の感情履歴";
@@ -108,6 +108,7 @@
       }
 
       try {
+        // APIエンドポイントでデータを取得
         const url = `${historyApiUrl}?user=${encodeURIComponent(u)}&group=daily`;
         const { ok, data } = await getJSON(url);
         if (!ok) {
@@ -116,7 +117,7 @@
         }
 
         // データを正しい形式に整形する
-        console.log('Daily Data:', data);  // 追加してレスポンスデータを確認
+        console.log('Daily Data:', data);  // レスポンスデータの確認
         const formattedData = formatDataForChart(data);
         return formattedData;
       } catch (e) {
