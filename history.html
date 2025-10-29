@@ -130,8 +130,7 @@
 
         // データを正しい形式に整形する
         console.log('Daily Data:', data);  // レスポンスデータの確認
-        const formattedData = formatDataForChart(data);
-        return formattedData;
+        return formatDataForChart(data);
       } catch (e) {
         if (msg) msg.textContent = "通信エラーが発生しました。";
         return { labels: [], seriesByEmotion: {} };
