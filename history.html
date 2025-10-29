@@ -1,99 +1,101 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta charset="UTF-8">
   <title>感情履歴</title>
-  <style>
-    body{font-family:sans-serif;margin:0;padding:1rem;background:#fafafa}
-    header{display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem}
-    a{color:#5b45ec;text-decoration:none}
-    .wrap{max-width:980px;margin:0 auto}
-    .card{background:#fff;border-radius:10px;padding:1rem;margin-bottom:16px;box-shadow:0 1px 4px rgba(0,0,0,.06)}
-    .row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-    #historyMessage{color:#e74c3c;margin-bottom:.5rem}
-  </style>
-  <!-- Chart.js CDN -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { font-family: sans-serif; display: flex; gap: 2rem; padding: 1rem; flex-wrap: wrap; }
+    #historyList { list-style: disc; padding-left: 1rem; max-width: 500px; }
+    #chartContainer { width: 500px; min-width: 300px; }
+    button { background: #5b45ec; color: white; padding: 0.5rem 1rem; border: none; border-radius: 5px; cursor: pointer; margin-top: 1rem; }
+    select { margin-bottom: 1rem; }
+  </style>
 </head>
 <body>
-  <div class="wrap">
-    <header>
-      <h1>感情履歴</h1>
-      <nav>
-        <a href="main.html">← 送信に戻る</a>
-      </nav>
-    </header>
+  <div>
+    <h2>感情履歴</h2>
+    <label for="viewSelect">表示切替：</label>
+    <select id="viewSelect">
+      <option value="date">日別</option>
+      <option value="weekday">曜日別</option>
+    </select>
+    <ul id="historyList"></ul>
+    <button onclick="window.location.href='main.html'">戻る</button>
+  </div>
 
-    <div id="historyMessage"></div>
-
-    <div class="card">
-      <h2>日別</h2>
-      <canvas id="dailyChart" height="120"></canvas>
-    </div>
-
-    <div class="card">
-      <h2>曜日別</h2>
-      <canvas id="weekdayChart" height="120"></canvas>
-    </div>
+  <div id="chartContainer">
+    <h2>感情分布グラフ</h2>
+    <canvas id="emotionChart"></canvas>
   </div>
 
   <script src="script.js"></script>
   <script>
-    // 取得して描画
-    (async function(){
-      const daily = await loadDailyHistory();
-      const weekday = await loadWeekdayHistory();
-      
-      // エラーメッセージを表示するために
-      const historyMessage = document.getElementById("historyMessage");
+    // 変数の宣言
+    const emotionChartCanvas = document.getElementById('emotionChart');
+    let emotionChart;
 
-      // 日別データが空の場合の処理
-      if (!daily || !daily.labels || daily.labels.length === 0) {
-        historyMessage.textContent = "日別の履歴データがありません。";
+    // 表示切り替え処理
+    document.getElementById('viewSelect').addEventListener('change', (event) => {
+      const selectedView = event.target.value;
+      updateChart(selectedView);
+    });
+
+    // 初期表示
+    async function updateChart(view) {
+      const historyList = document.getElementById('historyList');
+      let data;
+
+      // 日別の場合
+      if (view === 'date') {
+        data = await loadDailyHistory();
+        historyList.innerHTML = "日別の感情履歴";
+      } 
+      // 曜日別の場合
+      else if (view === 'weekday') {
+        data = await loadWeekdayHistory();
+        historyList.innerHTML = "曜日別の感情履歴";
       }
 
-      // 日別
-      if (daily && daily.labels) {
-        const ds = [];
-        for (const emo in daily.seriesByEmotion || {}) {
-          ds.push({
-            label: emo,
-            data: daily.seriesByEmotion[emo],
-            borderWidth: 2,
-            fill: false
-          });
-        }
-        new Chart(document.getElementById('dailyChart'), {
+      if (data && data.labels) {
+        // チャートを作成
+        const datasets = Object.keys(data.seriesByEmotion || {}).map(emo => ({
+          label: emo,
+          data: data.seriesByEmotion[emo],
+          borderWidth: 2,
+          fill: false
+        }));
+
+        // 既存のチャートがあれば破棄して新しいチャートを作成
+        if (emotionChart) emotionChart.destroy();
+        
+        emotionChart = new Chart(emotionChartCanvas, {
           type: 'line',
-          data: { labels: daily.labels, datasets: ds },
+          data: {
+            labels: data.labels,
+            datasets: datasets
+          },
           options: { responsive: true, maintainAspectRatio: false }
         });
       }
+    }
 
-      // 曜日別データが空の場合の処理
-      if (!weekday || !weekday.labels || weekday.labels.length === 0) {
-        historyMessage.textContent += " 曜日別の履歴データがありません。";
-      }
+    // 初期表示を日別に設定
+    updateChart('date');
 
-      // 曜日別
-      if (weekday && weekday.labels) {
-        const ds2 = [];
-        for (const emo in weekday.seriesByEmotion || {}) {
-          ds2.push({
-            label: emo,
-            data: weekday.seriesByEmotion[emo],
-            borderWidth: 2,
-            fill: false
-          });
-        }
-        new Chart(document.getElementById('weekdayChart'), {
-          type: 'line',
-          data: { labels: weekday.labels, datasets: ds2 },
-          options: { responsive: true, maintainAspectRatio: false }
-        });
-      }
-    })();
+    // 日別履歴を取得
+    async function loadDailyHistory() {
+      const response = await fetch('https://example.com/daily-history?user=津久井浜');
+      const data = await response.json();
+      return data;  // 期待する形式でデータを返す
+    }
+
+    // 曜日別履歴を取得
+    async function loadWeekdayHistory() {
+      const response = await fetch('https://example.com/weekday-history?user=津久井浜');
+      const data = await response.json();
+      return data;  // 期待する形式でデータを返す
+    }
   </script>
 </body>
 </html>
