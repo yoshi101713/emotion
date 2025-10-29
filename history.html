@@ -1,15 +1,16 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>感情履歴</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     body { font-family: sans-serif; display: flex; gap: 2rem; padding: 1rem; flex-wrap: wrap; }
-    #historyList { list-style: disc; padding-left: 1rem; max-width: 500px; }
-    #chartContainer { width: 500px; min-width: 300px; height: 360px; } /* グラフの高さ確保 */
-    button { background: #5b45ec; color: white; padding: 0.5rem 1rem; border: none; border-radius: 5px; cursor: pointer; margin-top: 1rem; }
+    #historyList { list-style: disc; padding-left: 1rem; max-width: 520px; }
+    #chartContainer { width: 520px; min-width: 320px; height: 360px; }
+    button { background: #5b45ec; color: white; padding: 0.5rem 1rem; border: none; border-radius: 8px; cursor: pointer; margin-top: 1rem; }
     select { margin-bottom: 1rem; }
+    h2 { margin: 0.4rem 0 0.8rem; }
   </style>
 </head>
 <body>
@@ -29,50 +30,84 @@
     <canvas id="emotionChart"></canvas>
   </div>
 
-  <!-- 先に共通の処理を読み込み -->
+  <!-- 共通ロジック（API呼び出し・集計など） -->
   <script src="script.js"></script>
 
-  <!-- ★ここから追記部分：描画とページ制御 ★ -->
+  <!-- ページ固有：詳細リスト＋グラフ描画 -->
   <script>
     const sel  = document.getElementById("viewSelect");
     const list = document.getElementById("historyList");
     const ctx  = document.getElementById("emotionChart").getContext("2d");
     let chart;
 
-    // 初期表示＆切替
     document.addEventListener("DOMContentLoaded", refresh);
     sel.addEventListener("change", refresh);
 
     async function refresh(){
       const user = localStorage.getItem("user");
       if (!user) {
-        list.innerHTML = "<li>未ログインです。index.htmlからログインしてください。</li>";
+        list.innerHTML = "<li>未ログインです。index.html からログインしてください。</li>";
         drawChart({labels:[], seriesByEmotion:{}}, "daily");
         return;
       }
 
       const mode = (sel.value === "weekday") ? "weekday" : "daily";
-      // script.js で定義済みの関数を呼ぶ
-      const data = (mode === "weekday")
-        ? await loadWeekdayHistory()
-        : await loadDailyHistory();
 
-      renderList(data);
-      drawChart(data, mode);
+      // 生配列（[{timestamp, emotion, user}, ...]）を取得
+      const { ok, data: raw } = await getJSON(`${historyApiUrl}?user=${encodeURIComponent(user)}`);
+      if (!ok || !Array.isArray(raw)) {
+        list.innerHTML = "<li>履歴の取得に失敗しました</li>";
+        drawChart({labels:[], seriesByEmotion:{}}, mode);
+        return;
+      }
+
+      // 左リスト：詳細（時刻＋感情）を表示
+      renderListRaw(raw, mode);
+
+      // グラフ：集計（script.js の aggregateHistory を利用）
+      const agg = aggregateHistory(raw, mode);
+      drawChart(agg, mode);
     }
 
-    function renderList(data){
+    // ===== 詳細リスト（「日付/曜日：件数」＋配下に「HH:MM:SS 感情」） =====
+    function renderListRaw(raw, mode){
+      const wd = ["日","月","火","水","木","金","土"];
+      const grouped = {}; // key -> array of items
+
+      raw.forEach(it => {
+        const d = new Date(it.timestamp);
+        if (isNaN(d.getTime())) return;
+        const key = (mode === "weekday") ? wd[d.getDay()] : d.toISOString().slice(0,10);
+        (grouped[key] ||= []).push(it);
+      });
+
+      // 並び順：曜日は固定順、日付は昇順
+      const keys = (mode === "weekday")
+        ? wd.filter(k => grouped[k])     // 日→土の固定順（存在するキーのみ）
+        : Object.keys(grouped).sort();   // YYYY-MM-DD 昇順
+
       list.innerHTML = "";
-      const totalsPerLabel = data.labels.map((_, idx) =>
-        Object.values(data.seriesByEmotion).reduce((s, arr) => s + ((arr && arr[idx]) || 0), 0)
-      );
-      data.labels.forEach((label, i) => {
+      keys.forEach(k => {
+        const arr = grouped[k].sort((a,b) => a.timestamp.localeCompare(b.timestamp));
+        const total = arr.length;
+
         const li = document.createElement("li");
-        li.textContent = `${label}：${totalsPerLabel[i]}件`;
+        const inner = arr
+          .map(it => `${formatTime(it.timestamp)}　${it.emotion}`)
+          .map(s => `<li>${s}</li>`).join("");
+
+        li.innerHTML = `<strong>${k}：${total}件</strong><ul>${inner}</ul>`;
         list.appendChild(li);
       });
     }
 
+    function formatTime(ts){
+      const d = new Date(ts);
+      const pad = n => String(n).padStart(2,"0");
+      return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    }
+
+    // ===== グラフ描画 =====
     function drawChart(data, mode){
       const labels = data.labels || [];
       const emotions = Object.keys(window.colorMap || {});
@@ -103,6 +138,5 @@
       });
     }
   </script>
-  <!-- ★追記ここまで★ -->
 </body>
 </html>
