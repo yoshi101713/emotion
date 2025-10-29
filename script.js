@@ -87,7 +87,7 @@ async function send(emotion){
   if(!emotion){ if(msg) msg.textContent = "感情が選択されていません。"; return; }
 
   try{
-    const payload = { user: u, emotion: emotion }; // Lambda側で日時・曜日付与想定
+    const payload = { user: u, emotion: emotion }; // Lambda側で日時付与
     const {ok, data} = await postJSON(emotionApiUrl, payload);
     if(ok){ if(msg) msg.textContent = "送信しました。"; }
     else { if(msg) msg.textContent = (data && data.message) ? data.message : "送信に失敗しました。"; }
@@ -99,31 +99,88 @@ async function send(emotion){
 /* =========================
    History (history.html 用)
    ========================= */
+/**
+ * /history が返す配列（[{timestamp, emotion, user}, ...]）を
+ * 日別/曜日別に { labels, seriesByEmotion } へ集計
+ */
+function aggregateHistory(items, mode /* "daily" | "weekday" */) {
+  const wd = ["日","月","火","水","木","金","土"];
+
+  // 1) キー作成（daily: YYYY-MM-DD / weekday: 日〜土）
+  const grouped = new Map(); // key -> [{emotion, timestamp}, ...]
+  for (const it of items) {
+    const ts = it.timestamp;
+    if (!ts) continue;
+
+    let key;
+    if (mode === "weekday") {
+      const d = new Date(ts);
+      if (isNaN(d.getTime())) continue;
+      key = wd[d.getDay()];
+    } else {
+      // タイムゾーン付きISOから YYYY-MM-DD を抽出（表示・並び安定）
+      key = String(ts).slice(0, 10);
+    }
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key).push({ emotion: it.emotion, timestamp: ts });
+  }
+
+  // 2) ラベル並び
+  let labels = Array.from(grouped.keys());
+  if (mode === "weekday") {
+    labels = wd; // 常に日→土固定
+  } else {
+    labels.sort(); // 日付は昇順
+  }
+
+  // 3) 感情一覧
+  const emotions = Object.keys(colorMap);
+
+  // 4) 感情ごとの系列（labels と同じ順序で件数を並べる）
+  const seriesByEmotion = {};
+  for (const emo of emotions) {
+    seriesByEmotion[emo] = labels.map(label => {
+      const arr = grouped.get(label) || [];
+      return arr.filter(e => e.emotion === emo).length;
+    });
+  }
+
+  return { labels, seriesByEmotion };
+}
+
 async function loadDailyHistory(){
   const u = getUser();
   const msg = $("#historyMessage") || $("#message");
   if(!u){ if(msg) msg.textContent = "未ログインです。"; return { labels: [], seriesByEmotion: {} }; }
 
   try{
-    const url = `${historyApiUrl}?user=${encodeURIComponent(u)}&group=daily`;
+    // /history は配列を返す前提
+    const url = `${historyApiUrl}?user=${encodeURIComponent(u)}`;
     const {ok, data} = await getJSON(url);
-    if(!ok){ if(msg) msg.textContent = (data && data.message) ? data.message : "履歴取得に失敗しました。"; return { labels: [], seriesByEmotion: {} }; }
-    return data;
+    if(!ok || !Array.isArray(data)){
+      if(msg) msg.textContent = (data && data.message) ? data.message : "履歴取得に失敗しました。";
+      return { labels: [], seriesByEmotion: {} };
+    }
+    return aggregateHistory(data, "daily");
   }catch(e){
     if(msg) msg.textContent = "通信エラーが発生しました。";
     return { labels: [], seriesByEmotion: {} };
   }
 }
+
 async function loadWeekdayHistory(){
   const u = getUser();
   const msg = $("#historyMessage") || $("#message");
   if(!u){ if(msg) msg.textContent = "未ログインです。"; return { labels: weekdayLabels, seriesByEmotion: {} }; }
 
   try{
-    const url = `${historyApiUrl}?user=${encodeURIComponent(u)}&group=weekday`;
+    const url = `${historyApiUrl}?user=${encodeURIComponent(u)}`;
     const {ok, data} = await getJSON(url);
-    if(!ok){ if(msg) msg.textContent = (data && data.message) ? data.message : "履歴取得に失敗しました。"; return { labels: weekdayLabels, seriesByEmotion: {} }; }
-    return data;
+    if(!ok || !Array.isArray(data)){
+      if(msg) msg.textContent = (data && data.message) ? data.message : "履歴取得に失敗しました。";
+      return { labels: weekdayLabels, seriesByEmotion: {} };
+    }
+    return aggregateHistory(data, "weekday");
   }catch(e){
     if(msg) msg.textContent = "通信エラーが発生しました。";
     return { labels: weekdayLabels, seriesByEmotion: {} };
