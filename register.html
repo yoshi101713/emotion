@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>新規登録</title>
+  <style>
+    body{font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:#f8f9fa;margin:0}
+    h1{margin-bottom:1.5rem}
+    form{display:flex;flex-direction:column;align-items:center}
+    input{padding:.8rem;margin:.4rem 0;width:260px;border:1px solid #ccc;border-radius:6px;font-size:1rem}
+    .row{display:flex;align-items:center;gap:.6rem;width:276px}
+    button{margin-top:1rem;padding:.8rem;width:276px;background:#5b45ec;color:#fff;font-size:1rem;border:none;border-radius:6px;cursor:pointer}
+    a{margin-top:.8rem;color:#5b45ec;text-decoration:none}
+    #msg{margin-top:.8rem;color:#e74c3c}
+  </style>
+</head>
+<body>
+  <h1>新規登録</h1>
+  <form id="regForm">
+    <input id="r_name" type="text" placeholder="ユーザ名（例：taro）" autocomplete="username" required />
+    <div class="row">
+      <input id="r_pass" type="password" placeholder="パスワード（4文字以上）" autocomplete="new-password" required />
+      <label><input type="checkbox" id="show">表示</label>
+    </div>
+    <input id="r_pass2" type="password" placeholder="パスワード（確認）" autocomplete="new-password" required />
+    <button type="submit">登録する</button>
+  </form>
+  <a href="index.html">← ログインに戻る</a>
+  <p id="msg"></p>
+
+  <script src="script.js"></script>
+  <script>
+    // 表示切替
+    document.getElementById('show').addEventListener('change', (e)=>{
+      const t = e.target.checked ? 'text' : 'password';
+      document.getElementById('r_pass').type = t;
+      document.getElementById('r_pass2').type = t;
+    });
+
+    // 登録送信
+    document.getElementById('regForm').addEventListener('submit', async (e)=>{
+      e.preventDefault();
+      const msg = document.getElementById('msg');
+      const name = document.getElementById('r_name').value.trim();
+      const pass = document.getElementById('r_pass').value;
+      const pass2= document.getElementById('r_pass2').value;
+
+      if(!name || !pass){ msg.textContent='名前とパスワードを入力してください。'; return; }
+      if(pass.length<4){ msg.textContent='パスワードは4文字以上にしてください。'; return; }
+      if(pass!==pass2){ msg.textContent='確認用パスワードが一致しません。'; return; }
+
+      const {ok, data} = await postJSON(registerApiUrl, { username: name, password: pass });
+      if(ok){
+        flashSet('登録が完了しました。ログインしてください。');
+        location.href = 'index.html';
+      }else{
+        msg.textContent = (data && data.message) ? data.message : '登録に失敗しました。';
+      }
+    });
+  </script>
+</body>
+</html>

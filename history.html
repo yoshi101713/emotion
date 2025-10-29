@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>感情履歴</title>
+  <style>
+    body{font-family:sans-serif;margin:0;padding:1rem;background:#fafafa}
+    header{display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem}
+    a{color:#5b45ec;text-decoration:none}
+    .wrap{max-width:980px;margin:0 auto}
+    .card{background:#fff;border-radius:10px;padding:1rem;margin-bottom:16px;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+    #historyMessage{color:#e74c3c;margin-bottom:.5rem}
+  </style>
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>感情履歴</h1>
+      <nav>
+        <a href="main.html">← 送信に戻る</a>
+      </nav>
+    </header>
+
+    <div id="historyMessage"></div>
+
+    <div class="card">
+      <h2>日別</h2>
+      <canvas id="dailyChart" height="120"></canvas>
+    </div>
+
+    <div class="card">
+      <h2>曜日別</h2>
+      <canvas id="weekdayChart" height="120"></canvas>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+  <script>
+    // 取得して描画
+    (async function(){
+      const daily = await loadDailyHistory();
+      const weekday = await loadWeekdayHistory();
+
+      // 日別
+      if(daily && daily.labels){
+        const ds = [];
+        for(const emo in daily.seriesByEmotion||{}){
+          ds.push({
+            label: emo,
+            data: daily.seriesByEmotion[emo],
+            borderWidth: 2,
+            fill: false
+          });
+        }
+        new Chart(document.getElementById('dailyChart'), {
+          type: 'line',
+          data: { labels: daily.labels, datasets: ds },
+          options: { responsive: true, maintainAspectRatio: false }
+        });
+      }
+
+      // 曜日別
+      if(weekday && weekday.labels){
+        const ds2 = [];
+        for(const emo in weekday.seriesByEmotion||{}){
+          ds2.push({
+            label: emo,
+            data: weekday.seriesByEmotion[emo],
+            borderWidth: 2,
+            fill: false
+          });
+        }
+        new Chart(document.getElementById('weekdayChart'), {
+          type: 'line',
+          data: { labels: weekday.labels, datasets: ds2 },
+          options: { responsive: true, maintainAspectRatio: false }
+        });
+      }
+    })();
+  </script>
+</body>
+</html>

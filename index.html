@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ログイン</title>
+  <style>
+    body{font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:#f8f9fa;margin:0}
+    h1{margin-bottom:1.2rem}
+    form{display:flex;flex-direction:column;align-items:center}
+    input{padding:.8rem;margin:.4rem 0;width:260px;border:1px solid #ccc;border-radius:6px;font-size:1rem}
+    .row{display:flex;align-items:center;gap:.6rem;width:276px}
+    button{margin-top:1rem;padding:.8rem;width:276px;background:#5b45ec;color:#fff;font-size:1rem;border:none;border-radius:6px;cursor:pointer}
+    a{margin-top:.8rem;color:#5b45ec;text-decoration:none}
+    #msg{margin-top:.8rem;color:#e74c3c}
+    #flash{margin-bottom:.8rem;color:#2e7d32}
+  </style>
+</head>
+<body>
+  <h1>ログイン</h1>
+  <div id="flash"></div>
+  <form id="loginForm">
+    <input id="username" type="text" placeholder="ユーザー名" autocomplete="username" required />
+    <div class="row">
+      <input id="password" type="password" placeholder="パスワード" autocomplete="current-password" required />
+      <label><input type="checkbox" id="show">表示</label>
+    </div>
+    <button type="submit">ログイン</button>
+  </form>
+  <a href="register.html">新規登録はこちら</a>
+  <p id="message"></p>
+
+  <script src="script.js"></script>
+  <script>
+    // パスワード表示切替
+    document.getElementById('show').addEventListener('change', (e)=>{
+      document.getElementById('password').type = e.target.checked ? 'text' : 'password';
+    });
+    // フラッシュ表示
+    showFlashIfAny('#flash');
+    // 送信
+    document.getElementById('loginForm').addEventListener('submit', (e)=>{
+      e.preventDefault();
+      login();
+    });
+  </script>
+</body>
+</html>

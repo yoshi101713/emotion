@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>感情送信</title>
+  <style>
+    body{font-family:sans-serif;margin:0;padding:2rem;background:#fafafa}
+    header{display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem}
+    .grid{display:grid;grid-template-columns:repeat(2,minmax(140px,1fr));gap:12px;max-width:420px}
+    button{padding:1rem;border:none;border-radius:10px;font-size:1rem;cursor:pointer;color:#222}
+    .note{margin-top:1rem;color:#555}
+    a{color:#5b45ec;text-decoration:none;margin-left:8px}
+    #sendMessage{margin-top:1rem;color:#2e7d32}
+  </style>
+</head>
+<body onload="initMainHeader()">
+  <header>
+    <div id="currentUser">未ログイン</div>
+    <nav>
+      <a href="history.html">履歴を見る</a>
+      <a href="#" onclick="logout()">ログアウト</a>
+    </nav>
+  </header>
+
+  <h1>いまの気持ちを送る</h1>
+  <div class="grid">
+    <button style="background:#F7D65C" onclick="send('喜び')">😊 喜び</button>
+    <button style="background:#FF6B6B" onclick="send('怒り')">😡 怒り</button>
+    <button style="background:#4DA3FF" onclick="send('悲しみ')">😢 悲しみ</button>
+    <button style="background:#7E6BFF" onclick="send('恐れ')">😨 恐れ</button>
+    <button style="background:#F5A623" onclick="send('驚き')">😲 驚き</button>
+    <button style="background:#BFC5CC" onclick="send('疲労')">😵‍💫 疲労</button>
+    <button style="background:#7EDFB3" onclick="send('リラックス')">😌 リラックス</button>
+  </div>
+
+  <div id="sendMessage" class="note"></div>
+
+  <script src="script.js"></script>
+</body>
+</html>
