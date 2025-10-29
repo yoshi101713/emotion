@@ -40,9 +40,8 @@
   <div>
     <h2>感情履歴</h2>
     <label for="viewSelect">表示切替：</label>
-    <select id="viewSelect">
+    <select id="viewSelect" disabled>
       <option value="date">日別</option>
-      <option value="weekday">曜日別</option>
     </select>
     <ul id="historyList"></ul>
     <button onclick="window.location.href='main.html'">戻る</button>
@@ -59,12 +58,6 @@
     const emotionChartCanvas = document.getElementById('emotionChart');
     let emotionChart;
 
-    // 表示切り替え処理
-    document.getElementById('viewSelect').addEventListener('change', (event) => {
-      const selectedView = event.target.value;
-      updateChart(selectedView);
-    });
-
     // 初期表示
     async function updateChart(view) {
       const historyList = document.getElementById('historyList');
@@ -74,11 +67,6 @@
       if (view === 'date') {
         data = await loadDailyHistory();
         historyList.innerHTML = "日別の感情履歴";
-      } 
-      // 曜日別の場合
-      else if (view === 'weekday') {
-        data = await loadWeekdayHistory();
-        historyList.innerHTML = "曜日別の感情履歴";
       }
 
       if (data && data.labels) {
@@ -137,36 +125,9 @@
       }
     }
 
-    // 曜日別履歴を取得
-    async function loadWeekdayHistory() {
-      const u = getUser();
-      const msg = $("#historyMessage") || $("#message");
-      if (!u) { 
-        if (msg) msg.textContent = "未ログインです。";
-        return { labels: weekdayLabels, seriesByEmotion: {} };
-      }
-
-      try {
-        const url = `${historyApiUrl}?user=${encodeURIComponent(u)}&group=weekday`;
-        const { ok, data } = await getJSON(url);
-        if (!ok) {
-          if (msg) msg.textContent = (data && data.message) ? data.message : "履歴取得に失敗しました。";
-          return { labels: weekdayLabels, seriesByEmotion: {} };
-        }
-
-        // データを正しい形式に整形する
-        console.log('Weekday Data:', data);  // 追加してレスポンスデータを確認
-        const formattedData = formatDataForChart(data);
-        return formattedData;
-      } catch (e) {
-        if (msg) msg.textContent = "通信エラーが発生しました。";
-        return { labels: weekdayLabels, seriesByEmotion: {} };
-      }
-    }
-
     // データをChart.js用に整形する
     function formatDataForChart(data) {
-      const labels = data.labels || [];  // 日付または曜日
+      const labels = data.labels || [];  // 日付
       const seriesByEmotion = {};
 
       // `seriesByEmotion` がオブジェクトの場合、Object.keys() を使って反復処理
