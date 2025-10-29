@@ -1,162 +1,108 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>感情履歴</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <style>
-    body {
-      font-family: sans-serif;
-      display: flex;
-      gap: 2rem;
-      padding: 1rem;
-      flex-wrap: wrap;
-    }
-    #historyList {
-      list-style: disc;
-      padding-left: 1rem;
-      max-width: 500px;
-    }
-    #chartContainer {
-      width: 500px;
-      min-width: 300px;
-    }
-    button {
-      background: #5b45ec;
-      color: white;
-      padding: 0.5rem 1rem;
-      border: none;
-      border-radius: 5px;
-      cursor: pointer;
-      margin-top: 1rem;
-    }
-    select {
-      margin-bottom: 1rem;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>感情履歴</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f9;
+            padding: 20px;
+        }
+        h3 {
+            color: #333;
+        }
+        #emotion-history ul {
+            list-style-type: none;
+            padding-left: 0;
+        }
+        #emotion-history li {
+            padding: 10px;
+            margin: 5px 0;
+            border-left: 5px solid;
+            font-size: 16px;
+        }
+        canvas {
+            margin-top: 30px;
+        }
+    </style>
 </head>
 <body>
-  <div>
-    <h2>感情履歴</h2>
-    <label for="viewSelect">表示切替：</label>
-    <select id="viewSelect">
-      <option value="date">日別</option>
-      <!-- 曜日別は無効化 -->
-    </select>
-    <ul id="historyList"></ul>
-    <button onclick="window.location.href='main.html'">戻る</button>
-  </div>
+    <h1>感情履歴</h1>
 
-  <div id="chartContainer">
-    <h2>感情分布グラフ</h2>
-    <canvas id="emotionChart"></canvas>
-  </div>
+    <!-- 感情履歴表示 -->
+    <div id="emotion-history"></div>
 
-  <script src="script.js"></script>
-  <script>
-    const emotionChartCanvas = document.getElementById('emotionChart');
-    let emotionChart;
+    <!-- グラフ表示エリア -->
+    <div>
+        <canvas id="emotionChart"></canvas>
+    </div>
 
-    // 初期表示（デフォルトで日別に設定）
-    async function updateChart(view) {
-      const historyList = document.getElementById('historyList');
-      let data;
+    <script src="script.js"></script>
+    <script>
+        // ここで感情履歴を取得し、グラフを描画する
+        const historyContainer = document.getElementById("emotion-history");
 
-      // 日別履歴を取得
-      if (view === 'date') {
-        data = await loadDailyHistory();
-        historyList.innerHTML = "日別の感情履歴";
-      }
+        // 日別履歴をグラフ表示
+        function displayEmotionHistory(data) {
+            if (!data || data.length === 0) {
+                historyContainer.innerHTML = "<p>まだ感情履歴はありません。</p>";
+                return;
+            }
 
-      if (data && data.labels) {
-        // データをChart.jsに渡す形式に整形
-        const formattedData = formatDataForChart(data);
+            historyContainer.innerHTML = "<h3>感情履歴</h3>";
+            const historyList = document.createElement("ul");
 
-        // チャートを作成
-        const datasets = Object.keys(formattedData.seriesByEmotion || {}).map(emo => ({
-          label: emo,
-          data: formattedData.seriesByEmotion[emo],
-          borderWidth: 2,
-          fill: false
-        }));
+            const emotionCounts = {
+                "喜び": 0,
+                "怒り": 0,
+                "悲しみ": 0,
+                "恐れ": 0,
+                "驚き": 0,
+                "疲労": 0,
+                "リラックス": 0
+            };
 
-        // 既存のチャートがあれば破棄して新しいチャートを作成
-        if (emotionChart) emotionChart.destroy();
-        
-        emotionChart = new Chart(emotionChartCanvas, {
-          type: 'line',
-          data: {
-            labels: formattedData.labels,
-            datasets: datasets
-          },
-          options: { responsive: true, maintainAspectRatio: false }
-        });
-      }
-    }
+            data.forEach(entry => {
+                const listItem = document.createElement("li");
+                listItem.style.color = colorMap[entry.emotion];
+                listItem.textContent = `${entry.timestamp}: ${entry.emotion}`;
+                historyList.appendChild(listItem);
 
-    // 初期表示を日別に設定
-    updateChart('date');
+                // 感情カウント
+                emotionCounts[entry.emotion]++;
+            });
 
-    // 日別履歴を取得
-    async function loadDailyHistory() {
-      const u = getUser();
-      const msg = $("#historyMessage") || $("#message");
-      if (!u) { 
-        if (msg) msg.textContent = "未ログインです。";
-        return { labels: [], seriesByEmotion: {} }; 
-      }
+            historyContainer.appendChild(historyList);
 
-      try {
-        // APIエンドポイントでデータを取得
-        const url = `${historyApiUrl}?user=${encodeURIComponent(u)}&group=daily`;
-        const { ok, data } = await getJSON(url);
-        if (!ok) {
-          if (msg) msg.textContent = (data && data.message) ? data.message : "履歴取得に失敗しました。";
-          return { labels: [], seriesByEmotion: {} };
+            // グラフ表示
+            const labels = Object.keys(emotionCounts);
+            const counts = Object.values(emotionCounts);
+
+            const ctx = document.getElementById('emotionChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: '感情のカウント',
+                        data: counts,
+                        backgroundColor: Object.values(colorMap),
+                        borderColor: Object.values(colorMap),
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
         }
-
-        // データを正しい形式に整形する
-        console.log('Daily Data:', data);  // レスポンスデータの確認
-        const formattedData = formatDataForChart(data);
-        return formattedData;
-      } catch (e) {
-        if (msg) msg.textContent = "通信エラーが発生しました。";
-        return { labels: [], seriesByEmotion: {} };
-      }
-    }
-
-    // データをChart.js用に整形する
-    function formatDataForChart(data) {
-      const labels = data.labels || [];  // 日付
-      const seriesByEmotion = {};
-
-      // `seriesByEmotion` がオブジェクトの場合、Object.keys() を使って反復処理
-      Object.keys(data.seriesByEmotion).forEach(emotion => {
-        const count = data.seriesByEmotion[emotion] || 0; // 感情のカウント
-
-        // 感情ごとのデータを`seriesByEmotion`に追加
-        if (!seriesByEmotion[emotion]) {
-          seriesByEmotion[emotion] = [];
-        }
-
-        seriesByEmotion[emotion].push(count);  // 感情ごとのデータを追加
-      });
-
-      return { labels, seriesByEmotion };
-    }
-
-    // ユーザーを取得
-    function getUser() {
-      return localStorage.getItem("user") || "";
-    }
-
-    // APIからデータを取得（GETメソッド）
-    async function getJSON(url) {
-      const res = await fetch(url, { method: "GET" });
-      const data = await res.json().catch(() => ({}));
-      return { ok: res.ok, status: res.status, data };
-    }
-  </script>
+    </script>
 </body>
 </html>
