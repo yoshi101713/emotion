@@ -80,6 +80,43 @@ function initMainHeader(){
   const el = $("#currentUser");
   if(el) el.textContent = u ? `ログイン中：${u}` : "未ログイン";
 }
+
+let _selectedEmotion = null;
+let _selectedBtn = null;
+
+/** 感情ボタンをクリックした時に選択だけ行う（送信はしない） */
+function selectEmotion(emotion, btnEl){
+  // ボタンの見た目を切り替え
+  if(_selectedBtn) _selectedBtn.classList.remove("selected");
+  _selectedBtn = btnEl;
+  if(_selectedBtn) _selectedBtn.classList.add("selected");
+
+  _selectedEmotion = emotion;
+  const label = $("#selectedLabel");
+  const sendBtn = $("#sendBtn");
+  if(label) label.textContent = `選択中：${emotion}`;
+  if(sendBtn) sendBtn.disabled = false;
+
+  // 既存の sendMessage 表示をリセット
+  const msg = $("#sendMessage");
+  if(msg) msg.textContent = "";
+}
+
+/** 既存の send() をそのまま使って、選択済みを送信する */
+async function sendSelected(){
+  if(!_selectedEmotion) return;
+  await send(_selectedEmotion);
+
+  // 成功・失敗メッセージは既存 send() が #sendMessage に表示
+  // 送信後は選択解除
+  const label = $("#selectedLabel");
+  const sendBtn = $("#sendBtn");
+  if(_selectedBtn) _selectedBtn.classList.remove("selected");
+  _selectedEmotion = null; _selectedBtn = null;
+  if(label) label.textContent = "（まだ選択されていません）";
+  if(sendBtn) sendBtn.disabled = true;
+}
+
 async function send(emotion){
   const u = getUser();
   const msg = $("#sendMessage") || $("#message");
@@ -89,7 +126,7 @@ async function send(emotion){
   try{
     const payload = { user: u, emotion: emotion }; // Lambda側で日時付与
     const {ok, data} = await postJSON(emotionApiUrl, payload);
-    if(ok){ if(msg) msg.textContent = "送信しました。"; }
+    if(ok){ if(msg) msg.textContent = `「${emotion}」を送信しました。`; }
     else { if(msg) msg.textContent = (data && data.message) ? data.message : "送信に失敗しました。"; }
   }catch(e){
     if(msg) msg.textContent = "通信エラーが発生しました。";
@@ -99,15 +136,9 @@ async function send(emotion){
 /* =========================
    History (history.html 用)
    ========================= */
-/**
- * /history が返す配列（[{timestamp, emotion, user}, ...]）を
- * 日別/曜日別に { labels, seriesByEmotion } へ集計
- */
 function aggregateHistory(items, mode /* "daily" | "weekday" */) {
   const wd = ["日","月","火","水","木","金","土"];
-
-  // 1) キー作成（daily: YYYY-MM-DD / weekday: 日〜土）
-  const grouped = new Map(); // key -> [{emotion, timestamp}, ...]
+  const grouped = new Map();
   for (const it of items) {
     const ts = it.timestamp;
     if (!ts) continue;
@@ -118,25 +149,16 @@ function aggregateHistory(items, mode /* "daily" | "weekday" */) {
       if (isNaN(d.getTime())) continue;
       key = wd[d.getDay()];
     } else {
-      // タイムゾーン付きISOから YYYY-MM-DD を抽出（表示・並び安定）
       key = String(ts).slice(0, 10);
     }
     if (!grouped.has(key)) grouped.set(key, []);
     grouped.get(key).push({ emotion: it.emotion, timestamp: ts });
   }
 
-  // 2) ラベル並び
   let labels = Array.from(grouped.keys());
-  if (mode === "weekday") {
-    labels = wd; // 常に日→土固定
-  } else {
-    labels.sort(); // 日付は昇順
-  }
+  if (mode === "weekday") labels = wd; else labels.sort();
 
-  // 3) 感情一覧
   const emotions = Object.keys(colorMap);
-
-  // 4) 感情ごとの系列（labels と同じ順序で件数を並べる）
   const seriesByEmotion = {};
   for (const emo of emotions) {
     seriesByEmotion[emo] = labels.map(label => {
@@ -144,7 +166,6 @@ function aggregateHistory(items, mode /* "daily" | "weekday" */) {
       return arr.filter(e => e.emotion === emo).length;
     });
   }
-
   return { labels, seriesByEmotion };
 }
 
@@ -154,7 +175,6 @@ async function loadDailyHistory(){
   if(!u){ if(msg) msg.textContent = "未ログインです。"; return { labels: [], seriesByEmotion: {} }; }
 
   try{
-    // /history は配列を返す前提
     const url = `${historyApiUrl}?user=${encodeURIComponent(u)}`;
     const {ok, data} = await getJSON(url);
     if(!ok || !Array.isArray(data)){
@@ -197,11 +217,13 @@ function showFlashIfAny(targetSelector="#flash"){
   if(f) el.textContent = f;
 }
 
-// Expose
+// Expose (他ページ互換のため公開）
 window.login = login;
 window.logout = logout;
 window.initMainHeader = initMainHeader;
-window.send = send;
+window.send = send;                 // 互換のため残す
+window.selectEmotion = selectEmotion;
+window.sendSelected = sendSelected;
 window.loadDailyHistory = loadDailyHistory;
 window.loadWeekdayHistory = loadWeekdayHistory;
 window.showFlashIfAny = showFlashIfAny;

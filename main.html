@@ -5,13 +5,58 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>感情送信</title>
   <style>
-    body{font-family:sans-serif;margin:0;padding:2rem;background:#fafafa}
-    header{display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem}
-    .grid{display:grid;grid-template-columns:repeat(2,minmax(140px,1fr));gap:12px;max-width:420px}
-    button{padding:1rem;border:none;border-radius:10px;font-size:1rem;cursor:pointer;color:#222}
-    .note{margin-top:1rem;color:#555}
+    :root{
+      --brand:#5b45ec;
+      --joy:#F7D65C; --anger:#FF6B6B; --sad:#4DA3FF; --fear:#7E6BFF;
+      --surprise:#F5A623; --tired:#BFC5CC; --calm:#7EDFB3;
+    }
+    *{box-sizing:border-box}
+    body{
+      font-family:sans-serif;margin:0;background:#fafafa;min-height:100vh;
+      display:flex;flex-direction:column;align-items:center;justify-content:center;
+      padding:24px;
+    }
+    header{display:flex;justify-content:space-between;align-items:center;
+      width:min(920px,92vw);margin:0 auto 8px;}
     a{color:#5b45ec;text-decoration:none;margin-left:8px}
-    #sendMessage{margin-top:1rem;color:#2e7d32}
+    h1{margin:8px 0 16px;text-align:center;font-size:clamp(24px,4.5vw,36px)}
+
+    .center{
+      width:min(920px,92vw); margin:0 auto; text-align:center;
+    }
+    .grid{
+      display:grid;
+      grid-template-columns:repeat(2,minmax(160px,1fr));
+      gap:14px;
+      justify-items:stretch;
+      margin: 0 auto 14px;
+    }
+    @media (min-width:900px){
+      .grid{ grid-template-columns:repeat(2,360px); }
+    }
+    .emotion-btn{
+      padding:1rem;border:none;border-radius:12px;font-size:1.05rem;cursor:pointer;color:#222;
+      box-shadow:0 4px 14px rgba(0,0,0,.08); outline:3px solid transparent; transition:.06s;
+    }
+    .emotion-btn:active{ transform: translateY(1px) }
+    .emotion-btn.selected{ outline:4px solid var(--brand); box-shadow:0 6px 18px rgba(91,69,236,.25) }
+
+    /* 色 */
+    .joy{background:var(--joy)} .anger{background:var(--anger)}
+    .sad{background:var(--sad)} .fear{background:var(--fear)}
+    .surprise{background:var(--surprise)} .tired{background:var(--tired)}
+    .calm{background:var(--calm)}
+
+    .send-area{ display:flex; gap:12px; justify-content:center; align-items:center; flex-wrap:wrap; }
+    #selectedLabel{ min-height:24px; font-weight:600; color:#333 }
+    #sendBtn{
+      background:var(--brand); color:#fff; border:none; border-radius:12px;
+      padding:12px 20px; font-size:16px; font-weight:700; cursor:pointer;
+      box-shadow:0 6px 18px rgba(91,69,236,.35);
+    }
+    #sendBtn:disabled{ opacity:.45; cursor:not-allowed; box-shadow:none; }
+
+    #sendMessage{margin-top:10px;color:#2e7d32; text-align:center;}
   </style>
 </head>
 <body onload="initMainHeader()">
@@ -23,18 +68,27 @@
     </nav>
   </header>
 
-  <h1>いまの気持ちを送る</h1>
-  <div class="grid">
-    <button style="background:#F7D65C" onclick="send('喜び')">😊 喜び</button>
-    <button style="background:#FF6B6B" onclick="send('怒り')">😡 怒り</button>
-    <button style="background:#4DA3FF" onclick="send('悲しみ')">😢 悲しみ</button>
-    <button style="background:#7E6BFF" onclick="send('恐れ')">😨 恐れ</button>
-    <button style="background:#F5A623" onclick="send('驚き')">😲 驚き</button>
-    <button style="background:#BFC5CC" onclick="send('疲労')">😵‍💫 疲労</button>
-    <button style="background:#7EDFB3" onclick="send('リラックス')">😌 リラックス</button>
-  </div>
+  <main class="center">
+    <h1>いまの気持ちを送る</h1>
 
-  <div id="sendMessage" class="note"></div>
+    <div class="grid" id="emotionGrid">
+      <!-- 送信はしない。まず選択だけする -->
+      <button class="emotion-btn joy"      data-emotion="喜び"     onclick="selectEmotion('喜び', this)">😊 喜び</button>
+      <button class="emotion-btn anger"    data-emotion="怒り"     onclick="selectEmotion('怒り', this)">😡 怒り</button>
+      <button class="emotion-btn sad"      data-emotion="悲しみ"   onclick="selectEmotion('悲しみ', this)">😢 悲しみ</button>
+      <button class="emotion-btn fear"     data-emotion="恐れ"     onclick="selectEmotion('恐れ', this)">😨 恐れ</button>
+      <button class="emotion-btn surprise" data-emotion="驚き"     onclick="selectEmotion('驚き', this)">😲 驚き</button>
+      <button class="emotion-btn tired"    data-emotion="疲労"     onclick="selectEmotion('疲労', this)">😵‍💫 疲労</button>
+      <button class="emotion-btn calm"     data-emotion="リラックス" onclick="selectEmotion('リラックス', this)" style="grid-column:1/-1">😌 リラックス</button>
+    </div>
+
+    <div class="send-area">
+      <span id="selectedLabel">（まだ選択されていません）</span>
+      <button id="sendBtn" onclick="sendSelected()" disabled>送信する</button>
+    </div>
+
+    <div id="sendMessage"></div>
+  </main>
 
   <script src="script.js"></script>
 </body>
