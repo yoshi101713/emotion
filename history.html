@@ -8,70 +8,122 @@
     body { font-family: sans-serif; display: flex; gap: 2rem; padding: 1rem; flex-wrap: wrap; }
     #historyList { list-style: disc; padding-left: 1rem; max-width: 520px; }
     #chartContainer { width: 520px; min-width: 320px; height: 360px; }
-    button { background: #5b45ec; color: white; padding: 0.5rem 1rem; border: none; border-radius: 8px; cursor: pointer; margin-top: 1rem; }
-    select { margin-bottom: 1rem; }
-    h2 { margin: 0.4rem 0 0.8rem; }
-
-    /* 追加: グラフ下のボタンを中央寄せ */
-    #chartActions { text-align: center; }
+    button { background: #5b45ec; color: white; padding: 0.5rem 1rem; border: none; border-radius: 8px; cursor: pointer; }
+    select { margin-bottom: 0.5rem; }
+    h2 { margin: 0.4rem 0 0.6rem; }
+    .row { display: flex; gap: .5rem; align-items: end; flex-wrap: wrap; }
+    .field { display: grid; gap: .25rem; }
+    .thin { margin-top: .4rem; }
+    #chartActions { text-align: center; margin-top: 0.5rem; }
+    input[type="date"] { padding: 0.25rem 0.5rem; }
+    .ghost { background: #eee; color: #333; }
   </style>
 </head>
 <body>
   <div>
     <h2>感情履歴</h2>
-    <label for="viewSelect">表示切替：</label>
-    <select id="viewSelect">
-      <option value="date">日別</option>
-      <option value="weekday">曜日別</option>
-    </select>
+
+    <!-- ▼ 追加: 日付フィルタUI -->
+    <div class="row">
+      <div class="field">
+        <label for="startDate">開始日</label>
+        <input id="startDate" type="date">
+      </div>
+      <div class="field">
+        <label for="endDate">終了日</label>
+        <input id="endDate" type="date">
+      </div>
+      <div class="field">
+        <button id="applyBtn">適用</button>
+      </div>
+      <div class="field">
+        <button id="clearBtn" class="ghost">クリア</button>
+      </div>
+    </div>
+    <!-- ▲ 追加ここまで -->
+
+    <div class="thin">
+      <label for="viewSelect">表示切替：</label>
+      <select id="viewSelect">
+        <option value="date">日別</option>
+        <option value="weekday">曜日別</option>
+      </select>
+    </div>
+
     <ul id="historyList"></ul>
-    <!-- ← ここにあった戻るボタンは削除 -->
+    <!-- 左カラムの戻るボタンは置かない -->
   </div>
 
   <div id="chartContainer">
     <h2>感情分布グラフ</h2>
     <canvas id="emotionChart"></canvas>
-
-    <!-- 追加: グラフの直下に戻るボタンを配置 -->
     <div id="chartActions">
       <button onclick="window.location.href='main.html'">戻る</button>
     </div>
   </div>
 
-  <!-- 共通ロジック（API呼び出し・集計など） -->
+  <!-- 共有ロジック（getJSON, aggregateHistory, colorMap, historyApiUrl など） -->
   <script src="script.js"></script>
 
-  <!-- ページ固有：日別=詳細 / 曜日別=サマリー -->
   <script>
     const sel  = document.getElementById("viewSelect");
     const list = document.getElementById("historyList");
     const ctx  = document.getElementById("emotionChart").getContext("2d");
+    const startDateEl = document.getElementById("startDate");
+    const endDateEl   = document.getElementById("endDate");
+    const applyBtn    = document.getElementById("applyBtn");
+    const clearBtn    = document.getElementById("clearBtn");
+
+    let rawAll = [];   // 取得した全履歴をキャッシュ
     let chart;
 
-    document.addEventListener("DOMContentLoaded", refresh);
+    document.addEventListener("DOMContentLoaded", init);
     sel.addEventListener("change", refresh);
+    applyBtn.addEventListener("click", refresh);
+    clearBtn.addEventListener("click", () => {
+      startDateEl.value = "";
+      endDateEl.value = "";
+      refresh();
+    });
 
-    async function refresh(){
+    async function init(){
       const user = localStorage.getItem("user");
       if (!user) {
         list.innerHTML = "<li>未ログインです。index.html からログインしてください。</li>";
         drawChart({labels:[], seriesByEmotion:{}}, "daily");
         return;
       }
+      const { ok, data } = await getJSON(`${historyApiUrl}?user=${encodeURIComponent(user)}`);
+      rawAll = ok && Array.isArray(data) ? data : [];
+      // 初期表示：全件表示（もしくは最近30日にしたい場合はここでデフォ値を入れる）
+      refresh();
+    }
 
+    function refresh(){
       const mode = (sel.value === "weekday") ? "weekday" : "daily";
-      const { ok, data: raw } = await getJSON(`${historyApiUrl}?user=${encodeURIComponent(user)}`);
-      if (!ok || !Array.isArray(raw)) {
-        list.innerHTML = "<li>履歴の取得に失敗しました</li>";
-        drawChart({labels:[], seriesByEmotion:{}}, mode);
-        return;
-      }
+      const filtered = filterByDateRange(rawAll, startDateEl.value, endDateEl.value);
 
-      if (mode === "daily") renderListDailyDetail(raw);
-      else renderListWeekdaySummary(raw);
+      if (mode === "daily") renderListDailyDetail(filtered);
+      else renderListWeekdaySummary(filtered);
 
-      const agg = aggregateHistory(raw, mode);
+      const agg = aggregateHistory(filtered, mode); // script.js 側の関数を利用
       drawChart(agg, mode);
+    }
+
+    // --- 日付範囲フィルタ（両端含む）。未入力は無制限扱い ---
+    function filterByDateRange(items, startStr, endStr){
+      if ((!startStr && !endStr) || items.length === 0) return items;
+
+      const start = startStr ? new Date(startStr + "T00:00:00+09:00") : null; // JST基準
+      const end   = endStr   ? new Date(endStr   + "T23:59:59.999+09:00") : null;
+
+      return items.filter(it => {
+        const d = new Date(it.timestamp); // サーバはUTC想定でもOK。ローカル比較はJST端で判定。
+        if (isNaN(d.getTime())) return false;
+        if (start && d < start) return false;
+        if (end && d > end) return false;
+        return true;
+      });
     }
 
     function renderListDailyDetail(raw){
@@ -79,19 +131,23 @@
       raw.forEach(it => {
         const d = new Date(it.timestamp);
         if (isNaN(d.getTime())) return;
-        const key = d.toISOString().slice(0,10);
+        const key = toLocalDateJST(d); // yyyy-mm-dd（JST）
         (grouped[key] ||= []).push(it);
       });
 
       const keys = Object.keys(grouped).sort();
       list.innerHTML = "";
+      if (keys.length === 0) {
+        list.innerHTML = "<li>該当するデータがありません。</li>";
+        return;
+      }
       keys.forEach(k => {
         const arr = grouped[k].sort((a,b) => a.timestamp.localeCompare(b.timestamp));
         const total = arr.length;
 
         const li = document.createElement("li");
         const inner = arr
-          .map(it => `${formatTime(it.timestamp)}　${it.emotion}`)
+          .map(it => `${formatTimeJST(new Date(it.timestamp))}　${it.emotion}`)
           .map(s => `<li>${s}</li>`).join("");
         li.innerHTML = `<strong>${k}：${total}件</strong><ul>${inner}</ul>`;
         list.appendChild(li);
@@ -108,6 +164,11 @@
       });
 
       list.innerHTML = "";
+      const has = Object.values(counts).some(v => v > 0);
+      if (!has) {
+        list.innerHTML = "<li>該当するデータがありません。</li>";
+        return;
+      }
       wd.forEach(w => {
         if (counts[w] > 0) {
           const li = document.createElement("li");
@@ -117,8 +178,15 @@
       });
     }
 
-    function formatTime(ts){
-      const d = new Date(ts);
+    function toLocalDateJST(d){
+      // JSTでのyyyy-mm-dd（ローカルがJSTならtoISOString扱いでもOKだが、明示しておく）
+      const y = d.getFullYear();
+      const m = String(d.getMonth()+1).padStart(2,"0");
+      const day = String(d.getDate()).padStart(2,"0");
+      return `${y}-${m}-${day}`;
+    }
+
+    function formatTimeJST(d){
       const pad = n => String(n).padStart(2,"0");
       return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
     }
