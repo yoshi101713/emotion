@@ -8,7 +8,7 @@
     body { font-family: sans-serif; display: flex; gap: 2rem; padding: 1rem; flex-wrap: wrap; }
     #historyList { list-style: disc; padding-left: 1rem; max-width: 520px; }
     #chartContainer { width: 520px; min-width: 320px; height: 360px; }
-    button { background: #5b45ec; color: white; padding: 0.5rem 1rem; border: none; border-radius: 8px; cursor: pointer; }
+    button { background: #5b45ec; color: white; padding: 0.5rem 0.9rem; border: none; border-radius: 8px; cursor: pointer; }
     select { margin-bottom: 0.5rem; }
     h2 { margin: 0.4rem 0 0.6rem; }
     .row { display: flex; gap: .5rem; align-items: end; flex-wrap: wrap; }
@@ -29,6 +29,10 @@
     .chip.active { border-color: #5b45ec; box-shadow: inset 0 0 0 9999px rgba(91,69,236,0.12); }
     .chip .swatch { display: inline-block; width: .9em; height: .9em; border-radius: 50%; margin-right: .35em; vertical-align: -0.05em; }
     .chipbar { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+
+    /* クイック期間ボタンの並び */
+    .quickbar { display: flex; gap: .4rem; flex-wrap: wrap; }
+    .quickbar .ghost { padding: 0.45rem 0.7rem; }
   </style>
 </head>
 <body>
@@ -51,6 +55,14 @@
       <div class="field">
         <button id="clearBtn" class="ghost">クリア</button>
       </div>
+    </div>
+
+    <!-- ▼ クイック期間ボタン（追加） -->
+    <div class="quickbar" style="margin:.4rem 0 .2rem;">
+      <button class="ghost" data-range="today">今日</button>
+      <button class="ghost" data-range="this_week">今週</button>
+      <button class="ghost" data-range="this_month">今月</button>
+      <button class="ghost" data-range="last_30">直近30日</button>
     </div>
 
     <!-- ▼ 感情フィルタ（トグルチップ） -->
@@ -97,11 +109,14 @@
     const btnAll      = document.getElementById("selectAll");
     const btnNone     = document.getElementById("clearAll");
 
+    // クイック期間ボタン
+    const quickBar = document.querySelector(".quickbar");
+
     let rawAll = [];            // 取得した全履歴
     let selected = new Set();   // 選択中の感情
     let chart;
 
-    // 表示順（colorMapのキー順でもOK。UI順を固定したい場合は明示）
+    // 表示順（UI固定）
     const EMOTIONS = ["喜び","怒り","悲しみ","恐れ","驚き","疲労","リラックス"];
 
     document.addEventListener("DOMContentLoaded", init);
@@ -110,11 +125,20 @@
     clearBtn.addEventListener("click", () => {
       startDateEl.value = ""; endDateEl.value = ""; refresh();
     });
+
+    // クイック期間クリック
+    quickBar.addEventListener("click", (e)=>{
+      const btn = e.target.closest("button[data-range]");
+      if (!btn) return;
+      setQuickRange(btn.dataset.range);
+      refresh();
+    });
+
     btnAll.addEventListener("click", () => { selected = new Set(EMOTIONS); syncChips(); refresh(); });
     btnNone.addEventListener("click", () => { selected.clear(); syncChips(); refresh(); });
 
     async function init(){
-      // 感情チップを作成（colorMapの色をスワッチに反映）
+      // 感情チップを作成
       buildEmotionChips();
 
       const user = localStorage.getItem("user");
@@ -126,7 +150,10 @@
       const { ok, data } = await getJSON(`${historyApiUrl}?user=${encodeURIComponent(user)}`);
       rawAll = ok && Array.isArray(data) ? data : [];
 
-      // 初期は全選択
+      // 初期は「直近30日」を設定（好みで変更OK）
+      setQuickRange("last_30");
+
+      // 初期は全感情を選択
       selected = new Set(EMOTIONS);
       syncChips();
 
@@ -155,6 +182,55 @@
         el.classList.toggle("active", selected.has(el.dataset.emotion));
       });
     }
+
+    // ====== クイック期間ロジック ======
+    function toYmd(d){ // Date→'YYYY-MM-DD'
+      const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,"0"), da=String(d.getDate()).padStart(2,"0");
+      return `${y}-${m}-${da}`;
+    }
+    function todayJST(){
+      // ブラウザがJSTなら new Date() でOK。明示したい場合は現在時刻からオフセット調整。
+      return new Date(); 
+    }
+    function setQuickRange(kind){
+      const now = todayJST();
+
+      if (kind === "today"){
+        const s = toYmd(now);
+        startDateEl.value = s; endDateEl.value = s; return;
+      }
+
+      if (kind === "this_week"){
+        // 今週（月〜日）: 月曜日が週の開始
+        const d = new Date(now);
+        const day = d.getDay();             // 0:日〜6:土
+        const diffToMon = (day + 6) % 7;    // 月=0, 火=1, ... 日=6
+        const start = new Date(d); start.setDate(d.getDate() - diffToMon);
+        const end   = new Date(start); end.setDate(start.getDate() + 6);
+        startDateEl.value = toYmd(start);
+        endDateEl.value   = toYmd(end);
+        return;
+      }
+
+      if (kind === "this_month"){
+        const y = now.getFullYear(), m = now.getMonth();
+        const start = new Date(y, m, 1);
+        const end   = new Date(y, m + 1, 0); // 月末日
+        startDateEl.value = toYmd(start);
+        endDateEl.value   = toYmd(end);
+        return;
+      }
+
+      if (kind === "last_30"){
+        const end = new Date(now);
+        const start = new Date(now);
+        start.setDate(start.getDate() - 29); // 今日含め30日
+        startDateEl.value = toYmd(start);
+        endDateEl.value   = toYmd(end);
+        return;
+      }
+    }
+    // ====== ここまで ======
 
     function refresh(){
       const mode = (sel.value === "weekday") ? "weekday" : "daily";
