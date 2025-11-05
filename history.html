@@ -17,13 +17,25 @@
     #chartActions { text-align: center; margin-top: 0.5rem; }
     input[type="date"] { padding: 0.25rem 0.5rem; }
     .ghost { background: #eee; color: #333; }
+
+    /* 感情フィルタ用のチップ */
+    .chips { display: flex; flex-wrap: wrap; gap: .4rem; margin: .4rem 0 .2rem; }
+    .chip {
+      padding: .35rem .6rem; border-radius: 999px; font-size: .9rem; line-height: 1;
+      border: 1px solid #ccc; background: #f7f7f7; color: #333; cursor: pointer; user-select: none;
+      transition: transform .02s ease-in;
+    }
+    .chip:active { transform: scale(0.98); }
+    .chip.active { border-color: #5b45ec; box-shadow: inset 0 0 0 9999px rgba(91,69,236,0.12); }
+    .chip .swatch { display: inline-block; width: .9em; height: .9em; border-radius: 50%; margin-right: .35em; vertical-align: -0.05em; }
+    .chipbar { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
   </style>
 </head>
 <body>
   <div>
     <h2>感情履歴</h2>
 
-    <!-- ▼ 追加: 日付フィルタUI -->
+    <!-- ▼ 日付フィルタ -->
     <div class="row">
       <div class="field">
         <label for="startDate">開始日</label>
@@ -40,7 +52,15 @@
         <button id="clearBtn" class="ghost">クリア</button>
       </div>
     </div>
-    <!-- ▲ 追加ここまで -->
+
+    <!-- ▼ 感情フィルタ（トグルチップ） -->
+    <div class="chipbar">
+      <div id="emotionChips" class="chips"></div>
+      <div style="display:flex; gap:.4rem;">
+        <button id="selectAll" class="ghost">全選択</button>
+        <button id="clearAll" class="ghost">全解除</button>
+      </div>
+    </div>
 
     <div class="thin">
       <label for="viewSelect">表示切替：</label>
@@ -51,7 +71,6 @@
     </div>
 
     <ul id="historyList"></ul>
-    <!-- 左カラムの戻るボタンは置かない -->
   </div>
 
   <div id="chartContainer">
@@ -62,7 +81,7 @@
     </div>
   </div>
 
-  <!-- 共有ロジック（getJSON, aggregateHistory, colorMap, historyApiUrl など） -->
+  <!-- 共通ロジック（getJSON, aggregateHistory, colorMap, historyApiUrl など） -->
   <script src="script.js"></script>
 
   <script>
@@ -74,19 +93,30 @@
     const applyBtn    = document.getElementById("applyBtn");
     const clearBtn    = document.getElementById("clearBtn");
 
-    let rawAll = [];   // 取得した全履歴をキャッシュ
+    const chipsWrap   = document.getElementById("emotionChips");
+    const btnAll      = document.getElementById("selectAll");
+    const btnNone     = document.getElementById("clearAll");
+
+    let rawAll = [];            // 取得した全履歴
+    let selected = new Set();   // 選択中の感情
     let chart;
+
+    // 表示順（colorMapのキー順でもOK。UI順を固定したい場合は明示）
+    const EMOTIONS = ["喜び","怒り","悲しみ","恐れ","驚き","疲労","リラックス"];
 
     document.addEventListener("DOMContentLoaded", init);
     sel.addEventListener("change", refresh);
     applyBtn.addEventListener("click", refresh);
     clearBtn.addEventListener("click", () => {
-      startDateEl.value = "";
-      endDateEl.value = "";
-      refresh();
+      startDateEl.value = ""; endDateEl.value = ""; refresh();
     });
+    btnAll.addEventListener("click", () => { selected = new Set(EMOTIONS); syncChips(); refresh(); });
+    btnNone.addEventListener("click", () => { selected.clear(); syncChips(); refresh(); });
 
     async function init(){
+      // 感情チップを作成（colorMapの色をスワッチに反映）
+      buildEmotionChips();
+
       const user = localStorage.getItem("user");
       if (!user) {
         list.innerHTML = "<li>未ログインです。index.html からログインしてください。</li>";
@@ -95,18 +125,46 @@
       }
       const { ok, data } = await getJSON(`${historyApiUrl}?user=${encodeURIComponent(user)}`);
       rawAll = ok && Array.isArray(data) ? data : [];
-      // 初期表示：全件表示（もしくは最近30日にしたい場合はここでデフォ値を入れる）
+
+      // 初期は全選択
+      selected = new Set(EMOTIONS);
+      syncChips();
+
       refresh();
+    }
+
+    function buildEmotionChips(){
+      chipsWrap.innerHTML = "";
+      EMOTIONS.forEach(e => {
+        const color = (window.colorMap && window.colorMap[e]) || "#ccc";
+        const chip = document.createElement("span");
+        chip.className = "chip";
+        chip.dataset.emotion = e;
+        chip.innerHTML = `<span class="swatch" style="background:${color}"></span>${e}`;
+        chip.addEventListener("click", () => {
+          if (selected.has(e)) selected.delete(e); else selected.add(e);
+          chip.classList.toggle("active", selected.has(e));
+          refresh();
+        });
+        chipsWrap.appendChild(chip);
+      });
+    }
+
+    function syncChips(){
+      [...chipsWrap.querySelectorAll(".chip")].forEach(el => {
+        el.classList.toggle("active", selected.has(el.dataset.emotion));
+      });
     }
 
     function refresh(){
       const mode = (sel.value === "weekday") ? "weekday" : "daily";
-      const filtered = filterByDateRange(rawAll, startDateEl.value, endDateEl.value);
+      let filtered = filterByDateRange(rawAll, startDateEl.value, endDateEl.value);
+      filtered = filterByEmotion(filtered, selected);
 
       if (mode === "daily") renderListDailyDetail(filtered);
       else renderListWeekdaySummary(filtered);
 
-      const agg = aggregateHistory(filtered, mode); // script.js 側の関数を利用
+      const agg = aggregateHistory(filtered, mode);
       drawChart(agg, mode);
     }
 
@@ -118,7 +176,7 @@
       const end   = endStr   ? new Date(endStr   + "T23:59:59.999+09:00") : null;
 
       return items.filter(it => {
-        const d = new Date(it.timestamp); // サーバはUTC想定でもOK。ローカル比較はJST端で判定。
+        const d = new Date(it.timestamp);
         if (isNaN(d.getTime())) return false;
         if (start && d < start) return false;
         if (end && d > end) return false;
@@ -126,12 +184,18 @@
       });
     }
 
+    // --- 感情フィルタ（selected が空なら0件に） ---
+    function filterByEmotion(items, selectedSet){
+      if (!selectedSet || selectedSet.size === 0) return [];
+      return items.filter(it => selectedSet.has(it.emotion));
+    }
+
     function renderListDailyDetail(raw){
       const grouped = {};
       raw.forEach(it => {
         const d = new Date(it.timestamp);
         if (isNaN(d.getTime())) return;
-        const key = toLocalDateJST(d); // yyyy-mm-dd（JST）
+        const key = toLocalDateJST(d); // yyyy-mm-dd
         (grouped[key] ||= []).push(it);
       });
 
@@ -179,7 +243,6 @@
     }
 
     function toLocalDateJST(d){
-      // JSTでのyyyy-mm-dd（ローカルがJSTならtoISOString扱いでもOKだが、明示しておく）
       const y = d.getFullYear();
       const m = String(d.getMonth()+1).padStart(2,"0");
       const day = String(d.getDate()).padStart(2,"0");
@@ -193,10 +256,10 @@
 
     function drawChart(data, mode){
       const labels = data.labels || [];
-      const emotions = Object.keys(window.colorMap || {});
+      const emotions = EMOTIONS; // UI順に合わせる
       const datasets = emotions.map(emotion => ({
         label: emotion,
-        backgroundColor: window.colorMap[emotion],
+        backgroundColor: (window.colorMap && window.colorMap[emotion]) || "#999",
         data: (data.seriesByEmotion && data.seriesByEmotion[emotion])
                 ? data.seriesByEmotion[emotion]
                 : Array(labels.length).fill(0)
@@ -220,6 +283,19 @@
         }
       });
     }
+
+    // 便利：棒クリックでその日だけに絞る（任意）
+    document.getElementById("emotionChart").onclick = (evt)=>{
+      if (!chart) return;
+      const p = chart.getElementsAtEventForMode(evt, 'nearest', {intersect:true}, true);
+      if (!p.length) return;
+      const idx = p[0].index;
+      const day = chart.data.labels[idx];
+      sel.value = "date";
+      startDateEl.value = day; endDateEl.value = day;
+      refresh();
+      document.getElementById("historyList")?.scrollIntoView({behavior:"smooth"});
+    };
   </script>
 </body>
 </html>
